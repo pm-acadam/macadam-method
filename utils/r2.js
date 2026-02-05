@@ -21,26 +21,29 @@ function getExt(mimetype) {
   return map[mimetype] || 'jpg';
 }
 
-async function uploadThumbnail(buffer, mimetype) {
-  if (!ALLOWED_TYPES.includes(mimetype)) {
-    throw new Error('Invalid file type. Use JPEG, PNG, GIF, or WebP.');
-  }
-  if (buffer.length > MAX_SIZE) {
-    throw new Error('File too large. Max 5MB.');
-  }
-  const ext = getExt(mimetype);
-  const key = `thumbnails/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-
-  await s3.send(
-    new PutObjectCommand({
-      Bucket: BUCKET,
-      Key: key,
-      Body: buffer,
-      ContentType: mimetype,
-    })
-  );
-
-  return `${PUBLIC_URL}/${key}`;
+function uploadToFolder(folder) {
+  return async (buffer, mimetype) => {
+    if (!ALLOWED_TYPES.includes(mimetype)) {
+      throw new Error('Invalid file type. Use JPEG, PNG, GIF, or WebP.');
+    }
+    if (buffer.length > MAX_SIZE) {
+      throw new Error('File too large. Max 5MB.');
+    }
+    const ext = getExt(mimetype);
+    const key = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: BUCKET,
+        Key: key,
+        Body: buffer,
+        ContentType: mimetype,
+      })
+    );
+    return `${PUBLIC_URL}/${key}`;
+  };
 }
 
-module.exports = { uploadThumbnail, ALLOWED_TYPES, MAX_SIZE };
+const uploadThumbnail = uploadToFolder('thumbnails');
+const uploadTestimonialImage = uploadToFolder('testimonials');
+
+module.exports = { uploadThumbnail, uploadTestimonialImage, ALLOWED_TYPES, MAX_SIZE };

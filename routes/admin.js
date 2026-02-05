@@ -6,7 +6,9 @@ const multer = require('multer');
 const Admin = require('../models/Admin');
 const Settings = require('../models/Settings');
 const Article = require('../models/Article');
-const { uploadThumbnail } = require('../utils/r2');
+const Testimonial = require('../models/Testimonial');
+const Inquiry = require('../models/Inquiry');
+const { uploadThumbnail, uploadTestimonialImage } = require('../utils/r2');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
@@ -228,6 +230,79 @@ router.post('/upload-image', requireAuth, upload.single('image'), async (req, re
   }
 });
 
+router.post('/upload-testimonial-image', requireAuth, upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const url = await uploadTestimonialImage(req.file.buffer, req.file.mimetype);
+    res.json({ url });
+  } catch (err) {
+    console.error('Upload testimonial image error:', err);
+    res.status(400).json({ error: err.message || 'Upload failed' });
+  }
+});
+
+// --- Testimonials (protected, max 5) ---
+const MAX_TESTIMONIALS = 5;
+
+router.get('/testimonials', requireAuth, async (req, res) => {
+  try {
+    const testimonials = await Testimonial.find().sort({ order: 1, createdAt: 1 }).lean();
+    res.json(testimonials);
+  } catch (err) {
+    console.error('List testimonials error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.post('/testimonials', requireAuth, async (req, res) => {
+  try {
+    const count = await Testimonial.countDocuments();
+    if (count >= MAX_TESTIMONIALS) {
+      return res.status(400).json({ error: `Maximum of ${MAX_TESTIMONIALS} testimonials allowed. Delete one to add another.` });
+    }
+    const { name, image, quote } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
+    if (!quote || !quote.trim()) return res.status(400).json({ error: 'Quote is required' });
+    const testimonial = await Testimonial.create({
+      name: name.trim(),
+      image: image || '',
+      quote: quote.trim(),
+      order: count,
+    });
+    res.status(201).json(testimonial);
+  } catch (err) {
+    console.error('Create testimonial error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.put('/testimonials/:id', requireAuth, async (req, res) => {
+  try {
+    const { name, image, quote } = req.body;
+    const testimonial = await Testimonial.findById(req.params.id);
+    if (!testimonial) return res.status(404).json({ error: 'Testimonial not found' });
+    if (name !== undefined) testimonial.name = String(name).trim();
+    if (image !== undefined) testimonial.image = String(image);
+    if (quote !== undefined) testimonial.quote = String(quote).trim();
+    await testimonial.save();
+    res.json(testimonial);
+  } catch (err) {
+    console.error('Update testimonial error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.delete('/testimonials/:id', requireAuth, async (req, res) => {
+  try {
+    const testimonial = await Testimonial.findByIdAndDelete(req.params.id);
+    if (!testimonial) return res.status(404).json({ error: 'Testimonial not found' });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete testimonial error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // --- Articles (protected) ---
 const LIMIT = 20;
 
@@ -388,6 +463,47 @@ router.patch('/articles/:id/unpublish', requireAuth, async (req, res) => {
     res.json(article);
   } catch (err) {
     console.error('Unpublish article error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// --- Inquiries (protected) ---
+router.get('/inquiries', requireAuth, async (req, res) => {
+  try {
+    const source = req.query.source; // contact | private-work | for-law-firms
+    const query = source && ['contact', 'private-work', 'for-law-firms'].includes(source)
+      ? { source }
+      : {};
+    const inquiries = await Inquiry.find(query).sort({ createdAt: -1 }).lean();
+    res.json(inquiries);
+  } catch (err) {
+    console.error('List inquiries error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.patch('/inquiries/:id/read', requireAuth, async (req, res) => {
+  try {
+    const inquiry = await Inquiry.findByIdAndUpdate(
+      req.params.id,
+      { read: true },
+      { new: true }
+    );
+    if (!inquiry) return res.status(404).json({ error: 'Inquiry not found' });
+    res.json(inquiry);
+  } catch (err) {
+    console.error('Mark inquiry read error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.delete('/inquiries/:id', requireAuth, async (req, res) => {
+  try {
+    const inquiry = await Inquiry.findByIdAndDelete(req.params.id);
+    if (!inquiry) return res.status(404).json({ error: 'Inquiry not found' });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete inquiry error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
