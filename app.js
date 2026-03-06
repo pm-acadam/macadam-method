@@ -9,6 +9,8 @@ const DIST_PATH = path.join(__dirname, 'dist');
 
 const adminRoutes = require('./routes/admin');
 const articlesRoutes = require('./routes/articles');
+const coursesRoutes = require('./routes/courses');
+const checkoutRoutes = require('./routes/checkout');
 const testimonialsRoutes = require('./routes/testimonials');
 const inquiriesRoutes = require('./routes/inquiries');
 
@@ -24,6 +26,8 @@ app.use(cors({
 
 app.use('/api/admin', adminRoutes);
 app.use('/api/articles', articlesRoutes);
+app.use('/api/courses', coursesRoutes);
+app.use('/api/checkout', checkoutRoutes);
 app.use('/api/testimonials', testimonialsRoutes);
 app.use('/api/inquiries', inquiriesRoutes);
 

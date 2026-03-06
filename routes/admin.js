@@ -6,11 +6,13 @@ const multer = require('multer');
 const Admin = require('../models/Admin');
 const Settings = require('../models/Settings');
 const Article = require('../models/Article');
+const Course = require('../models/Course');
 const Testimonial = require('../models/Testimonial');
 const Inquiry = require('../models/Inquiry');
-const { uploadThumbnail, uploadTestimonialImage } = require('../utils/r2');
+const { uploadThumbnail, uploadTestimonialImage, uploadCoursePdf } = require('../utils/r2');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+const uploadPdf = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 const router = express.Router();
 
@@ -230,6 +232,17 @@ router.post('/upload-image', requireAuth, upload.single('image'), async (req, re
   }
 });
 
+router.post('/upload-course-pdf', requireAuth, uploadPdf.single('pdf'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const url = await uploadCoursePdf(req.file.buffer, req.file.mimetype);
+    res.json({ url });
+  } catch (err) {
+    console.error('Upload course PDF error:', err);
+    res.status(400).json({ error: err.message || 'Upload failed' });
+  }
+});
+
 router.post('/upload-testimonial-image', requireAuth, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
@@ -304,13 +317,13 @@ router.delete('/testimonials/:id', requireAuth, async (req, res) => {
 });
 
 // --- Articles (protected) ---
-const LIMIT = 20;
+const ARTICLE_LIMIT = 20;
 
 // GET /api/admin/articles?page=1&search=...&status=draft|published|all
 router.get('/articles', requireAuth, async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const skip = (page - 1) * LIMIT;
+    const skip = (page - 1) * ARTICLE_LIMIT;
     const search = (req.query.search || '').trim();
     const status = req.query.status || 'all';
     const sort = req.query.sort || 'newest';
@@ -334,19 +347,149 @@ router.get('/articles', requireAuth, async (req, res) => {
     const articles = await Article.find(query)
       .sort(sortOpt)
       .skip(skip)
-      .limit(LIMIT)
+      .limit(ARTICLE_LIMIT)
       .lean();
     res.json({
       articles,
       pagination: {
         page,
-        limit: LIMIT,
+        limit: ARTICLE_LIMIT,
         total,
         totalPages: Math.ceil(total / LIMIT) || 1,
       },
     });
   } catch (err) {
     console.error('List articles error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// --- Courses (protected) ---
+const COURSE_LIMIT = 20;
+
+// GET /api/admin/courses?page=1&status=draft|published|all
+router.get('/courses', requireAuth, async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const skip = (page - 1) * COURSE_LIMIT;
+    const status = req.query.status || 'all';
+    const sort = req.query.sort || 'newest';
+
+    const query = {};
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+
+    const sortOpt = sort === 'oldest' ? { updatedAt: 1 } : { updatedAt: -1 };
+    const total = await Course.countDocuments(query);
+    const courses = await Course.find(query)
+      .sort(sortOpt)
+      .skip(skip)
+      .limit(COURSE_LIMIT)
+      .lean();
+
+    res.json({
+      courses,
+      pagination: {
+        page,
+        limit: COURSE_LIMIT,
+        total,
+        totalPages: Math.ceil(total / COURSE_LIMIT) || 1,
+      },
+    });
+  } catch (err) {
+    console.error('List courses error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/admin/courses - Create course
+router.post('/courses', requireAuth, async (req, res) => {
+  try {
+    const { title, slug, description, price, pdfUrl, thumbnail, status } = req.body;
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+    if (!slug || !slug.trim()) {
+      return res.status(400).json({ error: 'Slug is required' });
+    }
+
+    const existing = await Course.findOne({ slug: slug.trim() });
+    if (existing) {
+      return res.status(400).json({ error: 'Slug already in use' });
+    }
+
+    const course = await Course.create({
+      title: title.trim(),
+      slug: slug.trim(),
+      description: description || '',
+      price: typeof price === 'number' ? price : Number(price) || 0,
+      pdfUrl: pdfUrl || '',
+      thumbnail: thumbnail || '',
+      status: status === 'published' ? 'published' : 'draft',
+    });
+    res.status(201).json(course);
+  } catch (err) {
+    console.error('Create course error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/admin/courses/:id - Get single course
+router.get('/courses/:id', requireAuth, async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.id);
+    if (!course) return res.status(404).json({ error: 'Course not found' });
+    res.json(course);
+  } catch (err) {
+    console.error('Get course error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// PUT /api/admin/courses/:id - Update course
+router.put('/courses/:id', requireAuth, async (req, res) => {
+  try {
+    const { title, slug, description, price, pdfUrl, thumbnail, status } = req.body;
+    const course = await Course.findById(req.params.id);
+    if (!course) return res.status(404).json({ error: 'Course not found' });
+
+    if (title !== undefined) course.title = String(title).trim();
+    if (slug !== undefined) {
+      const trimmedSlug = String(slug).trim();
+      if (!trimmedSlug) {
+        return res.status(400).json({ error: 'Slug is required' });
+      }
+      const existing = await Course.findOne({ slug: trimmedSlug, _id: { $ne: course._id } });
+      if (existing) {
+        return res.status(400).json({ error: 'Slug already in use' });
+      }
+      course.slug = trimmedSlug;
+    }
+    if (description !== undefined) course.description = String(description);
+    if (price !== undefined) course.price = Number(price) || 0;
+    if (pdfUrl !== undefined) course.pdfUrl = String(pdfUrl);
+    if (thumbnail !== undefined) course.thumbnail = String(thumbnail);
+    if (status !== undefined) {
+      course.status = status === 'published' ? 'published' : 'draft';
+    }
+
+    await course.save();
+    res.json(course);
+  } catch (err) {
+    console.error('Update course error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// DELETE /api/admin/courses/:id - Delete course
+router.delete('/courses/:id', requireAuth, async (req, res) => {
+  try {
+    const course = await Course.findByIdAndDelete(req.params.id);
+    if (!course) return res.status(404).json({ error: 'Course not found' });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete course error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

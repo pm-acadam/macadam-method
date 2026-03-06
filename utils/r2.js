@@ -16,6 +16,10 @@ const s3 = new S3Client({
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 const MAX_SIZE = 5 * 1024 * 1024; // 5MB
 
+// PDFs for course materials
+const ALLOWED_PDF_TYPES = ['application/pdf'];
+const MAX_PDF_SIZE = 20 * 1024 * 1024; // 20MB
+
 function getExt(mimetype) {
   const map = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'image/webp': 'webp' };
   return map[mimetype] || 'jpg';
@@ -43,7 +47,37 @@ function uploadToFolder(folder) {
   };
 }
 
+function uploadPdfToFolder(folder) {
+  return async (buffer, mimetype) => {
+    if (!ALLOWED_PDF_TYPES.includes(mimetype)) {
+      throw new Error('Invalid file type. Only PDF is allowed.');
+    }
+    if (buffer.length > MAX_PDF_SIZE) {
+      throw new Error('File too large. Max 20MB.');
+    }
+    const key = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`;
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: BUCKET,
+        Key: key,
+        Body: buffer,
+        ContentType: mimetype,
+      })
+    );
+    return `${PUBLIC_URL}/${key}`;
+  };
+}
+
 const uploadThumbnail = uploadToFolder('thumbnails');
 const uploadTestimonialImage = uploadToFolder('testimonials');
+const uploadCoursePdf = uploadPdfToFolder('course-pdfs');
 
-module.exports = { uploadThumbnail, uploadTestimonialImage, ALLOWED_TYPES, MAX_SIZE };
+module.exports = {
+  uploadThumbnail,
+  uploadTestimonialImage,
+  uploadCoursePdf,
+  ALLOWED_TYPES,
+  MAX_SIZE,
+  ALLOWED_PDF_TYPES,
+  MAX_PDF_SIZE,
+};
