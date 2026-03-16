@@ -355,7 +355,7 @@ router.get('/articles', requireAuth, async (req, res) => {
         page,
         limit: ARTICLE_LIMIT,
         total,
-        totalPages: Math.ceil(total / LIMIT) || 1,
+        totalPages: Math.ceil(total / ARTICLE_LIMIT) || 1,
       },
     });
   } catch (err) {
