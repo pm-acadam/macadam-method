@@ -1,9 +1,11 @@
+require('dotenv').config();
+
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const mongoose = require('mongoose');
-require('dotenv').config();
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const DIST_PATH = path.join(__dirname, 'dist');
 
@@ -13,6 +15,8 @@ const coursesRoutes = require('./routes/courses');
 const checkoutRoutes = require('./routes/checkout');
 const testimonialsRoutes = require('./routes/testimonials');
 const inquiriesRoutes = require('./routes/inquiries');
+const clarityRoutes = require('./routes/clarity');
+const regulationResetRoutes = require('./routes/regulation-reset');
 
 const app = express();
 
@@ -30,6 +34,8 @@ app.use('/api/courses', coursesRoutes);
 app.use('/api/checkout', checkoutRoutes);
 app.use('/api/testimonials', testimonialsRoutes);
 app.use('/api/inquiries', inquiriesRoutes);
+app.use('/api/clarity', clarityRoutes);
+app.use('/api/regulation-reset', regulationResetRoutes);
 
 // Serve static assets from client build
 app.use(express.static(DIST_PATH));

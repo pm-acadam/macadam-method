@@ -1,5 +1,6 @@
 const express = require('express');
 const Inquiry = require('../models/Inquiry');
+const { sendInquiryNotification } = require('../utils/email');
 
 const router = express.Router();
 
@@ -18,6 +19,14 @@ router.post('/', async (req, res) => {
       email: email.trim(),
       message: (message || '').trim(),
     });
+
+    sendInquiryNotification({
+      source,
+      name: name.trim(),
+      email: email.trim(),
+      message: (message || '').trim(),
+    }).catch(err => console.error('Failed to send inquiry notification:', err));
+
     res.status(201).json({ success: true, id: inquiry._id });
   } catch (err) {
     console.error('Create inquiry error:', err);

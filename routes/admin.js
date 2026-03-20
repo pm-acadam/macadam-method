@@ -651,6 +651,85 @@ router.delete('/inquiries/:id', requireAuth, async (req, res) => {
   }
 });
 
+// --- Payments & Clarity Sessions (for admin dashboard) ---
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const ClaritySessionModel = require('../models/ClaritySession');
+
+// GET /api/admin/payments - List all successful Stripe payments
+router.get('/payments', requireAuth, async (req, res) => {
+  try {
+    const sessions = await stripe.checkout.sessions.list({
+      limit: 100,
+      status: 'complete',
+    });
+
+    const payments = sessions.data.filter(s => s.payment_status === 'paid').map(session => ({
+      id: session.id,
+      amount_total: session.amount_total,
+      currency: session.currency,
+      payment_status: session.payment_status,
+      created: session.created,
+      customer_email: session.customer_email,
+      customer_details: session.customer_details,
+      metadata: session.metadata,
+      courseSlug: session.metadata?.courseSlug,
+      courseId: session.metadata?.courseId,
+    }));
+
+    res.json({ payments });
+  } catch (err) {
+    console.error('Admin list payments error:', err);
+    res.status(500).json({ error: err.message || 'Failed to list payments' });
+  }
+});
+
+// GET /api/admin/receipt/:sessionId - Get receipt for a Stripe payment
+router.get('/receipt/:sessionId', requireAuth, async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+    if (!session) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+
+    let courseTitle = 'Course';
+    if (session.metadata?.courseSlug) {
+      const course = await Course.findOne({ slug: session.metadata.courseSlug }).lean();
+      if (course) courseTitle = course.title;
+    }
+
+    res.json({
+      id: session.id,
+      amount_total: session.amount_total,
+      currency: session.currency,
+      payment_status: session.payment_status,
+      created: session.created,
+      customer_email: session.customer_email,
+      customer_details: session.customer_details,
+      metadata: session.metadata,
+      courseTitle,
+      payment_method_details: session.payment_method_details,
+    });
+  } catch (err) {
+    console.error('Admin get receipt error:', err);
+    res.status(500).json({ error: err.message || 'Failed to get receipt' });
+  }
+});
+
+// GET /api/admin/clarity/sessions - List all paid clarity sessions
+router.get('/clarity/sessions', requireAuth, async (req, res) => {
+  try {
+    const sessions = await ClaritySessionModel.find({ stripePaymentStatus: 'paid' })
+      .sort({ createdAt: -1 })
+      .lean();
+    res.json({ sessions });
+  } catch (err) {
+    console.error('Admin list clarity sessions error:', err);
+    res.status(500).json({ error: err.message || 'Failed to list sessions' });
+  }
+});
+
 // GET /api/admin/verify - Verify admin token cookie (for protected routes)
 router.get('/verify', (req, res) => {
   try {

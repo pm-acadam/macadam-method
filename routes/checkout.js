@@ -109,6 +109,74 @@ router.get('/verify', async (req, res) => {
   }
 });
 
+// GET /api/checkout/payments - List all successful payments (admin only)
+router.get('/payments', async (req, res) => {
+  try {
+    // List all checkout sessions with payment status = 'paid'
+    const sessions = await stripe.checkout.sessions.list({
+      limit: 100,
+      status: 'complete',
+    });
+
+    const payments = sessions.data.filter(s => s.payment_status === 'paid').map(session => ({
+      id: session.id,
+      amount_total: session.amount_total,
+      currency: session.currency,
+      payment_status: session.payment_status,
+      created: session.created,
+      customer_email: session.customer_email,
+      customer_details: session.customer_details,
+      metadata: session.metadata,
+      courseSlug: session.metadata?.courseSlug,
+      courseId: session.metadata?.courseId,
+    }));
+
+    res.json({ payments });
+  } catch (err) {
+    console.error('List payments error:', err);
+    res.status(500).json({ error: err.message || 'Failed to list payments' });
+  }
+});
+
+// GET /api/checkout/receipt/:sessionId - Get receipt details for a specific payment
+router.get('/receipt/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+    if (!session) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+
+    // Get the course details if available
+    let courseTitle = 'Course';
+    if (session.metadata?.courseSlug) {
+      const course = await Course.findOne({ slug: session.metadata.courseSlug }).lean();
+      if (course) {
+        courseTitle = course.title;
+      }
+    }
+
+    const receipt = {
+      id: session.id,
+      amount_total: session.amount_total,
+      currency: session.currency,
+      payment_status: session.payment_status,
+      created: session.created,
+      customer_email: session.customer_email,
+      customer_details: session.customer_details,
+      metadata: session.metadata,
+      courseTitle,
+      payment_method_details: session.payment_method_details,
+    };
+
+    res.json(receipt);
+  } catch (err) {
+    console.error('Get receipt error:', err);
+    res.status(500).json({ error: err.message || 'Failed to get receipt' });
+  }
+});
+
 // GET /api/checkout/download?session_id=... - Verify payment then download PDF (attachment)
 router.get('/download', async (req, res) => {
   try {
