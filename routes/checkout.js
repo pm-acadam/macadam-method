@@ -96,16 +96,39 @@ function downloadToBuffer(url) {
 router.get('/verify', async (req, res) => {
   try {
     const sessionId = String(req.query.session_id || '').trim();
-    if (!sessionId) return res.status(400).json({ error: 'session_id is required' });
+    if (!sessionId) {
+      return res.status(400).json({ error: 'session_id is required', paid: false });
+    }
+
+    // Validate session ID format
+    if (!sessionId.startsWith('cs_')) {
+      return res.status(400).json({ error: 'Invalid session_id format', paid: false });
+    }
 
     const session = await stripe.checkout.sessions.retrieve(sessionId);
+    
+    // Check session age - reject if older than 24 hours
+    const sessionAge = Math.floor((Date.now() - session.created * 1000) / 1000 / 3600);
+    if (sessionAge > 24) {
+      return res.status(403).json({ 
+        error: 'Session has expired (older than 24 hours)',
+        paid: false,
+        courseSlug: ''
+      });
+    }
+
     const paid = session?.payment_status === 'paid';
     const courseSlug = session?.metadata?.courseSlug || '';
 
     res.json({ paid, courseSlug });
   } catch (err) {
     console.error('Verify checkout session error:', err);
-    res.status(400).json({ error: 'Unable to verify payment' });
+    const statusCode = err.type === 'StripeInvalidRequestError' ? 402 : 500;
+    res.status(statusCode).json({ 
+      error: 'Unable to verify payment',
+      paid: false,
+      courseSlug: ''
+    });
   }
 });
 
@@ -188,6 +211,12 @@ router.get('/download', async (req, res) => {
       return res.status(402).json({ error: 'Payment not completed' });
     }
 
+    // Check session age - can't download if older than 30 days
+    const sessionAge = Math.floor((Date.now() - session.created * 1000) / 1000 / 86400);
+    if (sessionAge > 30) {
+      return res.status(403).json({ error: 'Download link has expired' });
+    }
+
     const courseSlug = session?.metadata?.courseSlug;
     if (!courseSlug) return res.status(400).json({ error: 'Invalid session metadata' });
 
@@ -204,7 +233,8 @@ router.get('/download', async (req, res) => {
     res.send(pdfBuffer);
   } catch (err) {
     console.error('Download course PDF error:', err);
-    res.status(400).json({ error: err.message || 'Download failed' });
+    const statusCode = err.message?.includes('too large') ? 413 : 500;
+    res.status(statusCode).json({ error: err.message || 'Download failed' });
   }
 });
 

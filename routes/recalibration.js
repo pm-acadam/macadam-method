@@ -1,7 +1,7 @@
 const express = require('express');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const ClaritySession = require('../models/ClaritySession');
-const { sendClaritySessionConfirmation } = require('../utils/email');
+const RecalibrationSession = require('../models/RecalibrationSession');
+const { sendRecalibrationConfirmation } = require('../utils/email');
 
 const router = express.Router();
 
@@ -11,9 +11,9 @@ router.use((req, res, next) => {
 });
 
 const SITE_URL = process.env.SITE_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
-const SESSION_PRICE = 30000; // $300 in cents
+const SESSION_PRICE = 50000; // $500 in cents
 
-// POST /api/clarity/create-checkout - Create Stripe Checkout session for clarity session
+// POST /api/recalibration/create-checkout - Create Stripe Checkout session for deep clarity session
 router.post('/create-checkout', async (req, res) => {
   try {
     const { firstName, lastName, email, phone, message } = req.body;
@@ -23,19 +23,19 @@ router.post('/create-checkout', async (req, res) => {
     }
 
     // Create a pending session record first
-    const tempSession = new ClaritySession({
+    const tempSession = new RecalibrationSession({
       firstName,
       lastName,
       email,
       phone: phone || '',
       message: message || '',
-      stripeSessionId: null, // Will be set by webhook
+      stripeSessionId: null,
       stripePaymentStatus: 'pending',
       amount: SESSION_PRICE,
     });
     await tempSession.save();
 
-    // Create Stripe checkout session with the DB record ID in metadata
+    // Create Stripe checkout session
     const stripeSession = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
@@ -43,8 +43,8 @@ router.post('/create-checkout', async (req, res) => {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: 'MacAdam Clarity Mapping Session',
-              description: '60-minute strategic clarity mapping session',
+              name: 'Clarity Session',
+              description: '90-minute strategic clarity and deep dive session with Patricia',
             },
             unit_amount: SESSION_PRICE,
           },
@@ -52,40 +52,26 @@ router.post('/create-checkout', async (req, res) => {
         },
       ],
       mode: 'payment',
-      success_url: `${SITE_URL.replace(/\/$/, '')}/clarity-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${SITE_URL.replace(/\/$/, '')}/clarity-session?canceled=true`,
+      success_url: `${SITE_URL.replace(/\/$/, '')}/recalibration-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${SITE_URL.replace(/\/$/, '')}/clarity-session-deep?canceled=true`,
       customer_email: email,
       metadata: {
-        claritySessionId: String(tempSession._id),
+        recalibrationSessionId: String(tempSession._id),
       },
     });
 
-    // Update with Stripe session ID (webhook will handle payment update)
+    // Update with Stripe session ID
     tempSession.stripeSessionId = stripeSession.id;
     await tempSession.save();
 
     res.json({ url: stripeSession.url });
   } catch (err) {
-    console.error('Clarity session checkout error:', err);
+    console.error('Recalibration session checkout error:', err);
     res.status(500).json({ error: err.message || 'Failed to create checkout session' });
   }
 });
 
-// GET /api/clarity/sessions - List all paid clarity sessions (admin only)
-router.get('/sessions', async (req, res) => {
-  try {
-    const sessions = await ClaritySession.find({ stripePaymentStatus: 'paid' })
-      .sort({ createdAt: -1 })
-      .lean();
-
-    res.json({ sessions });
-  } catch (err) {
-    console.error('List clarity sessions error:', err);
-    res.status(500).json({ error: err.message || 'Failed to list sessions' });
-  }
-});
-
-// GET /api/clarity/verify - Verify payment completion, update DB, send email
+// GET /api/recalibration/verify - Verify payment completion
 router.get('/verify', async (req, res) => {
   try {
     const sessionId = String(req.query.session_id || '').trim();
@@ -93,7 +79,6 @@ router.get('/verify', async (req, res) => {
       return res.status(400).json({ error: 'session_id is required' });
     }
 
-    // Validate session ID format (Stripe sessions start with cs_)
     if (!sessionId.startsWith('cs_')) {
       return res.status(400).json({ error: 'Invalid session_id format' });
     }
@@ -110,11 +95,11 @@ router.get('/verify', async (req, res) => {
     }
 
     const paid = stripeSession?.payment_status === 'paid';
-    let claritySession = await ClaritySession.findOne({ stripeSessionId: sessionId });
+    let recalibrationSession = await RecalibrationSession.findOne({ stripeSessionId: sessionId });
 
-    if (!claritySession) {
+    if (!recalibrationSession) {
       return res.status(404).json({ 
-        error: 'Clarity session record not found',
+        error: 'Session record not found',
         paid: false 
       });
     }
@@ -122,10 +107,9 @@ router.get('/verify', async (req, res) => {
     // Webhook handles both the update and email confirmation
     // This endpoint is just for client-side verification, no duplicate email
 
-    res.json({ paid, session: claritySession });
+    res.json({ paid, session: recalibrationSession });
   } catch (err) {
-    console.error('Verify clarity session error:', err);
-    // Return 402 for payment issues, 500 for server issues
+    console.error('Verify recalibration session error:', err);
     const statusCode = err.type === 'StripeInvalidRequestError' ? 402 : 500;
     res.status(statusCode).json({ 
       error: 'Unable to verify payment',
@@ -134,11 +118,11 @@ router.get('/verify', async (req, res) => {
   }
 });
 
-// GET /api/clarity/session/:id - Get specific session details
+// GET /api/recalibration/session/:id - Get specific session details
 router.get('/session/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const session = await ClaritySession.findById(id).lean();
+    const session = await RecalibrationSession.findById(id).lean();
 
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
@@ -146,8 +130,9 @@ router.get('/session/:id', async (req, res) => {
 
     res.json(session);
   } catch (err) {
-    console.error('Get clarity session error:', err);
+    console.error('Get recalibration session error:', err);
     res.status(500).json({ error: err.message || 'Failed to get session' });
   }
 });
+
 module.exports = router;

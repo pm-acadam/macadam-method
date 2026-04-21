@@ -298,10 +298,129 @@ async function sendInquiryNotification({ source, name, email, message }) {
       return { success: false, error: error.message };
     }
 
-    console.log('Inquiry notification sent:', data.id);
     return { success: true, messageId: data.id };
   } catch (error) {
     console.error('Error sending inquiry notification:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+async function sendRecalibrationConfirmation(session) {
+  const { firstName, lastName, email, phone, message, amount, createdAt } = session;
+
+  const formattedDate = new Date(createdAt).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
+  const receiptHtml = `
+    <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <div style="text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #333;">
+        <h1 style="font-size: 28px; margin: 0 0 10px 0; font-family: 'Times New Roman', serif;">The MacAdam Company</h1>
+        <p style="margin: 0; color: #666; font-size: 14px;">Payment Receipt</p>
+      </div>
+
+      <div style="margin-bottom: 24px;">
+        <h3 style="font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #666; margin: 0 0 8px 0;">Transaction Details</h3>
+        <p style="margin: 4px 0; font-size: 14px;">
+          <span style="color: #666;">Date:</span> ${formattedDate}
+        </p>
+        <p style="margin: 4px 0; font-size: 14px;">
+          <span style="color: #666;">Session Type:</span> Recalibration Session
+        </p>
+      </div>
+
+      <div style="margin-bottom: 24px;">
+        <h3 style="font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #666; margin: 0 0 8px 0;">Customer Information</h3>
+        <p style="margin: 4px 0; font-size: 14px;">
+          <span style="color: #666;">Name:</span> ${firstName} ${lastName}
+        </p>
+        <p style="margin: 4px 0; font-size: 14px;">
+          <span style="color: #666;">Email:</span> ${email}
+        </p>
+        ${phone ? `<p style="margin: 4px 0; font-size: 14px;"><span style="color: #666;">Phone:</span> ${phone}</p>` : ''}
+      </div>
+
+      <div style="margin-bottom: 24px;">
+        <h3 style="font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #666; margin: 0 0 8px 0;">Session Details</h3>
+        <p style="margin: 4px 0; font-size: 14px;"><span style="color: #666;">Duration:</span> 60 minutes</p>
+        ${message ? `<p style="margin: 4px 0; font-size: 14px;"><span style="color: #666;">Message:</span> ${message}</p>` : ''}
+      </div>
+
+      <div style="text-align: center; padding: 20px; background: #f9f9f9; border-radius: 8px; margin: 30px 0;">
+        <p style="color: #666; font-size: 14px; margin: 0 0 5px 0;">Total Paid</p>
+        <p style="font-size: 24px; font-weight: bold; margin: 0;">$${(amount / 100).toFixed(2)}</p>
+      </div>
+
+      <div style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666;">
+        <p>Thank you for booking your Recalibration Session!</p>
+        <p>We look forward to helping you gain fresh perspective on your priorities.</p>
+      </div>
+    </div>
+  `;
+
+  // Notification email for Patricia
+  const adminHtml = `
+    <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <div style="text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #333;">
+        <h1 style="font-size: 28px; margin: 0 0 10px 0; font-family: 'Times New Roman', serif;">New Recalibration Session Booking</h1>
+        <p style="margin: 0; color: #666; font-size: 14px;">A new recalibration session has been booked and paid.</p>
+      </div>
+
+      <div style="margin-bottom: 24px;">
+        <h3 style="font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #666; margin: 0 0 8px 0;">Customer</h3>
+        <p style="margin: 4px 0; font-size: 14px;"><strong>${firstName} ${lastName}</strong></p>
+        <p style="margin: 4px 0; font-size: 14px;">Email: <a href="mailto:${email}">${email}</a></p>
+        ${phone ? `<p style="margin: 4px 0; font-size: 14px;">Phone: ${phone}</p>` : ''}
+      </div>
+
+      ${message ? `
+      <div style="margin-bottom: 24px;">
+        <h3 style="font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #666; margin: 0 0 8px 0;">Their Message</h3>
+        <p style="margin: 4px 0; font-size: 14px; background: #f9f9f9; padding: 12px; border-radius: 6px;">${message}</p>
+      </div>
+      ` : ''}
+
+      <div style="text-align: center; padding: 16px; background: #000; border-radius: 8px; margin: 20px 0;">
+        <p style="color: #fff; font-size: 18px; font-weight: bold; margin: 0;">$${(amount / 100).toFixed(2)} paid</p>
+        <p style="color: #aaa; font-size: 12px; margin: 4px 0 0 0;">${formattedDate}</p>
+      </div>
+    </div>
+  `;
+
+  try {
+    // Send receipt to customer
+    const customerResult = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: email,
+      subject: 'Confirmation: Recalibration Session',
+      html: receiptHtml,
+    });
+
+    if (customerResult.error) {
+      console.error('Error sending customer email:', customerResult.error);
+    } else {
+      console.log('Customer email sent:', customerResult.data.id);
+    }
+
+    // Send notification to Patricia
+    const adminResult = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: PATRICIA_EMAIL,
+      subject: `New Booking: ${firstName} ${lastName} — Recalibration Session ($${(amount / 100).toFixed(2)})`,
+      html: adminHtml,
+    });
+
+    if (adminResult.error) {
+      console.error('Error sending admin notification:', adminResult.error);
+    } else {
+      console.log('Admin notification sent:', adminResult.data.id);
+    }
+
+    return { success: !customerResult.error, messageId: customerResult.data?.id };
+  } catch (error) {
+    console.error('Error sending recalibration confirmation email:', error);
     return { success: false, error: error.message };
   }
 }
@@ -310,4 +429,5 @@ module.exports = {
   sendClaritySessionConfirmation,
   sendRegulationResetConfirmation,
   sendInquiryNotification,
+  sendRecalibrationConfirmation,
 };

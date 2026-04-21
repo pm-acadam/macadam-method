@@ -44,6 +44,11 @@ const claritySessionSchema = new mongoose.Schema({
     type: String,
     default: 'usd',
   },
+  status: {
+    type: String,
+    enum: ['pending', 'scheduled', 'completed', 'cancelled'],
+    default: 'pending',
+  },
   createdAt: {
     type: Date,
     default: Date.now,

@@ -654,6 +654,7 @@ router.delete('/inquiries/:id', requireAuth, async (req, res) => {
 // --- Payments & Clarity Sessions (for admin dashboard) ---
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const ClaritySessionModel = require('../models/ClaritySession');
+const RecalibrationSessionModel = require('../models/RecalibrationSession');
 
 // GET /api/admin/payments - List all successful Stripe payments
 router.get('/payments', requireAuth, async (req, res) => {
@@ -727,6 +728,73 @@ router.get('/clarity/sessions', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('Admin list clarity sessions error:', err);
     res.status(500).json({ error: err.message || 'Failed to list sessions' });
+  }
+});
+
+// GET /api/admin/recalibration/sessions - List all paid recalibration sessions
+router.get('/recalibration/sessions', requireAuth, async (req, res) => {
+  try {
+    const sessions = await RecalibrationSessionModel.find({ stripePaymentStatus: 'paid' })
+      .sort({ createdAt: -1 })
+      .lean();
+    res.json({ sessions });
+  } catch (err) {
+    console.error('Admin list recalibration sessions error:', err);
+    res.status(500).json({ error: err.message || 'Failed to list sessions' });
+  }
+});
+
+// PATCH /api/admin/clarity/:id/status - Update clarity session status
+router.patch('/clarity/:id/status', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!['pending', 'scheduled', 'completed', 'cancelled'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    const session = await ClaritySessionModel.findByIdAndUpdate(
+      id,
+      { status },
+      { new: true }
+    );
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    res.json({ session });
+  } catch (err) {
+    console.error('Admin update clarity status error:', err);
+    res.status(500).json({ error: err.message || 'Failed to update status' });
+  }
+});
+
+// PATCH /api/admin/recalibration/:id/status - Update recalibration session status
+router.patch('/recalibration/:id/status', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!['pending', 'scheduled', 'completed', 'cancelled'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    const session = await RecalibrationSessionModel.findByIdAndUpdate(
+      id,
+      { status },
+      { new: true }
+    );
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    res.json({ session });
+  } catch (err) {
+    console.error('Admin update recalibration status error:', err);
+    res.status(500).json({ error: err.message || 'Failed to update status' });
   }
 });
 

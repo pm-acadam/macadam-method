@@ -17,8 +17,13 @@ const testimonialsRoutes = require('./routes/testimonials');
 const inquiriesRoutes = require('./routes/inquiries');
 const clarityRoutes = require('./routes/clarity');
 const regulationResetRoutes = require('./routes/regulation-reset');
+const recalibrationRoutes = require('./routes/recalibration');
+const webhookRoutes = require('./routes/webhooks');
 
 const app = express();
+
+// Webhook routes MUST come before express.json() for Stripe signature verification
+app.use('/api/webhooks', webhookRoutes);
 
 app.use(express.json());
 app.use(cookieParser());
@@ -36,6 +41,7 @@ app.use('/api/testimonials', testimonialsRoutes);
 app.use('/api/inquiries', inquiriesRoutes);
 app.use('/api/clarity', clarityRoutes);
 app.use('/api/regulation-reset', regulationResetRoutes);
+app.use('/api/recalibration', recalibrationRoutes);
 
 // Serve static assets from client build
 app.use(express.static(DIST_PATH));
