@@ -11,7 +11,7 @@ router.use((req, res, next) => {
 
 const SITE_URL = process.env.SITE_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
 const PRICE = 4700; // $47 in cents
-const PDF_URL = process.env.REGULATION_RESET_PDF_URL || 'https://pub-66a3335a61d046f1bdf3f81c9e8d8bf0.r2.dev/course-pdfs/1772220522172-f7kjiag0ao5.pdf';
+const PDF_URL = process.env.REGULATION_RESET_PDF_URL || 'https://pub-66a3335a61d046f1bdf3f81c9e8d8bf0.r2.dev/course-pdfs/1776993739715-lg217mf56rh.pdf';
 const MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024;
 
 // POST /api/regulation-reset/create-checkout

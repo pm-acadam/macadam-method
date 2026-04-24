@@ -17,9 +17,21 @@ const uploadPdf = multer({ storage: multer.memoryStorage(), limits: { fileSize: 
 const router = express.Router();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-jwt-secret-change-in-production';
+const CLOUDFLARE_PUBLIC_URL = process.env.CLOUDFLARE_R2_PUBLIC_URL?.replace(/\/$/, '') || 'https://pub-66a3335a61d046f1bdf3f81c9e8d8bf0.r2.dev';
 
 function generateSecretKey() {
   return crypto.randomBytes(32).toString('hex');
+}
+
+function formatCourseUrls(course) {
+  const obj = course.toObject ? course.toObject() : { ...course };
+  if (obj.pdfUrl && !obj.pdfUrl.startsWith('http')) {
+    obj.pdfUrl = CLOUDFLARE_PUBLIC_URL + obj.pdfUrl;
+  }
+  if (obj.thumbnail && !obj.thumbnail.startsWith('http')) {
+    obj.thumbnail = CLOUDFLARE_PUBLIC_URL + obj.thumbnail;
+  }
+  return obj;
 }
 
 async function getSettings() {
@@ -388,8 +400,10 @@ router.get('/courses', requireAuth, async (req, res) => {
       .limit(COURSE_LIMIT)
       .lean();
 
+    const formattedCourses = courses.map(formatCourseUrls);
+
     res.json({
-      courses,
+      courses: formattedCourses,
       pagination: {
         page,
         limit: COURSE_LIMIT,
@@ -428,7 +442,7 @@ router.post('/courses', requireAuth, async (req, res) => {
       thumbnail: thumbnail || '',
       status: status === 'published' ? 'published' : 'draft',
     });
-    res.status(201).json(course);
+    res.status(201).json(formatCourseUrls(course));
   } catch (err) {
     console.error('Create course error:', err);
     res.status(500).json({ error: 'Server error' });
@@ -440,7 +454,7 @@ router.get('/courses/:id', requireAuth, async (req, res) => {
   try {
     const course = await Course.findById(req.params.id);
     if (!course) return res.status(404).json({ error: 'Course not found' });
-    res.json(course);
+    res.json(formatCourseUrls(course));
   } catch (err) {
     console.error('Get course error:', err);
     res.status(500).json({ error: 'Server error' });
@@ -475,7 +489,7 @@ router.put('/courses/:id', requireAuth, async (req, res) => {
     }
 
     await course.save();
-    res.json(course);
+    res.json(formatCourseUrls(course));
   } catch (err) {
     console.error('Update course error:', err);
     res.status(500).json({ error: 'Server error' });

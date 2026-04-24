@@ -1,7 +1,7 @@
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 
 const BUCKET = process.env.CLOUDFLARE_R2_BUCKET_NAME;
-const PUBLIC_URL = process.env.CLOUDFLARE_R2_PUBLIC_URL?.replace(/\/$/, '') || '';
+const PUBLIC_URL = process.env.CLOUDFLARE_R2_PUBLIC_URL?.replace(/\/$/, '') || 'https://pub-66a3335a61d046f1bdf3f81c9e8d8bf0.r2.dev';
 
 const s3 = new S3Client({
   region: 'auto',

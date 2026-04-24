@@ -7,7 +7,16 @@ const http = require('http');
 const router = express.Router();
 
 const SITE_URL = process.env.SITE_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
+const CLOUDFLARE_PUBLIC_URL = process.env.CLOUDFLARE_R2_PUBLIC_URL?.replace(/\/$/, '') || 'https://pub-66a3335a61d046f1bdf3f81c9e8d8bf0.r2.dev';
 const MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024; // 25MB safety cap
+
+function formatCourseUrls(course) {
+  const obj = course.toObject ? course.toObject() : { ...course };
+  if (obj.thumbnail && !obj.thumbnail.startsWith('http')) {
+    obj.thumbnail = CLOUDFLARE_PUBLIC_URL + obj.thumbnail;
+  }
+  return obj;
+}
 
 // POST /api/checkout/create-session - Create Stripe Checkout session for a course
 router.post('/create-session', async (req, res) => {
@@ -18,14 +27,16 @@ router.post('/create-session', async (req, res) => {
       return res.status(400).json({ error: 'Course slug is required' });
     }
 
-    const course = await Course.findOne({
+    const courseRaw = await Course.findOne({
       slug: courseSlug.trim(),
       status: 'published',
     }).lean();
 
-    if (!course) {
+    if (!courseRaw) {
       return res.status(404).json({ error: 'Course not found' });
     }
+
+    const course = formatCourseUrls(courseRaw);
 
     const price = typeof course.price === 'number' ? course.price : 0;
     if (price <= 0) {

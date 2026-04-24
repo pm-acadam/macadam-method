@@ -164,9 +164,15 @@ async function sendRegulationResetConfirmation({ email, name, amount, createdAt,
       <div style="margin-bottom: 24px;">
         <h3 style="font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #666; margin: 0 0 8px 0;">What's Included</h3>
         <p style="margin: 4px 0; font-size: 14px;">• Guided regulation session (~45 min video)</p>
-        <p style="margin: 4px 0; font-size: 14px;">• Practical framework you can reuse</p>
-        <p style="margin: 4px 0; font-size: 14px;">• Repeatable reset tool</p>
+        <p style="margin: 4px 0; font-size: 14px;">• The MacAdam Method™ — complete five-step framework</p>
+        <p style="margin: 4px 0; font-size: 14px;">• Daily practice guide</p>
         <p style="margin: 4px 0; font-size: 14px;">• Downloadable PDF reference guide</p>
+        <p style="margin: 4px 0; font-size: 14px;">• Permanent access — no expiration</p>
+      </div>
+
+      <div style="margin-bottom: 24px; padding: 16px; background: #f9f9f9; border-radius: 8px; text-align: center;">
+        <p style="margin: 0 0 12px 0; font-size: 14px; color: #333;">Thank you for investing in yourself. This work is yours now — return to it whenever you need it.</p>
+        <p style="margin: 0; font-size: 13px; color: #666;">— Patricia MacAdam<br/>Founder & CEO, The MacAdam Company<br/>themacadamco.com</p>
       </div>
 
       <div style="text-align: center; padding: 20px; background: #f9f9f9; border-radius: 8px; margin: 30px 0;">
