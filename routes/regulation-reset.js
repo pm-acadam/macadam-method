@@ -25,7 +25,7 @@ router.post('/create-checkout', async (req, res) => {
             currency: 'usd',
             product_data: {
               name: 'Regulation Reset™',
-              description: 'Guided nervous system reset — video session + PDF framework. Lifetime access.',
+              description: 'Guided nervous system reset — PDF framework. Lifetime access.',
             },
             unit_amount: PRICE,
           },

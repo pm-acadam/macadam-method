@@ -163,7 +163,7 @@ async function sendRegulationResetConfirmation({ email, name, amount, createdAt,
 
       <div style="margin-bottom: 24px;">
         <h3 style="font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #666; margin: 0 0 8px 0;">What's Included</h3>
-        <p style="margin: 4px 0; font-size: 14px;">• Guided regulation session (~45 min video)</p>
+        <p style="margin: 4px 0; font-size: 14px;">• Guided regulation session</p>
         <p style="margin: 4px 0; font-size: 14px;">• The MacAdam Method™ — complete five-step framework</p>
         <p style="margin: 4px 0; font-size: 14px;">• Daily practice guide</p>
         <p style="margin: 4px 0; font-size: 14px;">• Downloadable PDF reference guide</p>
