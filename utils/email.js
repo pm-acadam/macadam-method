@@ -312,7 +312,14 @@ async function sendInquiryNotification({ source, name, email, message }) {
 }
 
 async function sendRecalibrationConfirmation(session) {
-  const { firstName, lastName, email, phone, message, amount, createdAt } = session;
+  const { firstName, lastName, email, phone, message, amount, createdAt, sessionType } = session;
+
+  const isPrivate = sessionType === 'private-work';
+  const sessionLabel = isPrivate ? 'Private Regulation Session' : 'Recalibration Session';
+  const adminTitle = isPrivate ? 'Private Session' : 'Recalibration Session';
+  const adminIntro = isPrivate
+    ? 'A new private regulation session has been booked and paid.'
+    : 'A new recalibration session has been booked and paid.';
 
   const formattedDate = new Date(createdAt).toLocaleDateString('en-US', {
     year: 'numeric',
@@ -333,7 +340,7 @@ async function sendRecalibrationConfirmation(session) {
           <span style="color: #666;">Date:</span> ${formattedDate}
         </p>
         <p style="margin: 4px 0; font-size: 14px;">
-          <span style="color: #666;">Session Type:</span> Recalibration Session
+          <span style="color: #666;">Session Type:</span> ${sessionLabel}
         </p>
       </div>
 
@@ -350,7 +357,7 @@ async function sendRecalibrationConfirmation(session) {
 
       <div style="margin-bottom: 24px;">
         <h3 style="font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #666; margin: 0 0 8px 0;">Session Details</h3>
-        <p style="margin: 4px 0; font-size: 14px;"><span style="color: #666;">Duration:</span> 60 minutes</p>
+        <p style="margin: 4px 0; font-size: 14px;"><span style="color: #666;">Duration:</span> ${isPrivate ? '60–90 minutes' : '60 minutes'}</p>
         ${message ? `<p style="margin: 4px 0; font-size: 14px;"><span style="color: #666;">Message:</span> ${message}</p>` : ''}
       </div>
 
@@ -360,8 +367,8 @@ async function sendRecalibrationConfirmation(session) {
       </div>
 
       <div style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666;">
-        <p>Thank you for booking your Recalibration Session!</p>
-        <p>We look forward to helping you gain fresh perspective on your priorities.</p>
+        <p>Thank you for booking your ${sessionLabel}!</p>
+        <p>We look forward to supporting you.</p>
       </div>
     </div>
   `;
@@ -370,8 +377,8 @@ async function sendRecalibrationConfirmation(session) {
   const adminHtml = `
     <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
       <div style="text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #333;">
-        <h1 style="font-size: 28px; margin: 0 0 10px 0; font-family: 'Times New Roman', serif;">New Recalibration Session Booking</h1>
-        <p style="margin: 0; color: #666; font-size: 14px;">A new recalibration session has been booked and paid.</p>
+        <h1 style="font-size: 28px; margin: 0 0 10px 0; font-family: 'Times New Roman', serif;">New ${adminTitle} Booking</h1>
+        <p style="margin: 0; color: #666; font-size: 14px;">${adminIntro}</p>
       </div>
 
       <div style="margin-bottom: 24px;">
@@ -400,7 +407,7 @@ async function sendRecalibrationConfirmation(session) {
     const customerResult = await resend.emails.send({
       from: FROM_EMAIL,
       to: email,
-      subject: 'Confirmation: Recalibration Session',
+      subject: `Confirmation: ${sessionLabel}`,
       html: receiptHtml,
     });
 
@@ -414,7 +421,7 @@ async function sendRecalibrationConfirmation(session) {
     const adminResult = await resend.emails.send({
       from: FROM_EMAIL,
       to: PATRICIA_EMAIL,
-      subject: `New Booking: ${firstName} ${lastName} — Recalibration Session ($${(amount / 100).toFixed(2)})`,
+      subject: `New Booking: ${firstName} ${lastName} — ${adminTitle} ($${(amount / 100).toFixed(2)})`,
       html: adminHtml,
     });
 

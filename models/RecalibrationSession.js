@@ -5,18 +5,38 @@ const recalibrationSessionSchema = new mongoose.Schema(
     firstName: {
       type: String,
       required: true,
+      trim: true,
+      maxlength: 80,
     },
     lastName: {
       type: String,
       required: true,
+      trim: true,
+      maxlength: 80,
     },
     email: {
       type: String,
       required: true,
+      trim: true,
       lowercase: true,
+      maxlength: 254,
     },
-    phone: String,
-    message: String,
+    phone: {
+      type: String,
+      trim: true,
+      maxlength: 25,
+    },
+    message: {
+      type: String,
+      maxlength: 2000,
+      trim: true,
+      default: '',
+    },
+    sessionType: {
+      type: String,
+      enum: ['recalibration', 'private-work'],
+      default: 'recalibration',
+    },
     stripeSessionId: {
       type: String,
       unique: true,

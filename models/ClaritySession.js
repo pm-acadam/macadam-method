@@ -5,26 +5,32 @@ const claritySessionSchema = new mongoose.Schema({
     type: String,
     required: true,
     trim: true,
+    maxlength: 80,
   },
   lastName: {
     type: String,
     required: true,
     trim: true,
+    maxlength: 80,
   },
   email: {
     type: String,
     required: true,
     trim: true,
+    lowercase: true,
+    maxlength: 254,
   },
   phone: {
     type: String,
     trim: true,
+    maxlength: 25,
     default: '',
   },
   message: {
     type: String,
-    default: '',
+    maxlength: 2000,
     trim: true,
+    default: '',
   },
   stripeSessionId: {
     type: String,

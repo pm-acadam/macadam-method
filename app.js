@@ -18,6 +18,7 @@ const inquiriesRoutes = require('./routes/inquiries');
 const clarityRoutes = require('./routes/clarity');
 const regulationResetRoutes = require('./routes/regulation-reset');
 const recalibrationRoutes = require('./routes/recalibration');
+const privateWorkRoutes = require('./routes/private-work');
 const webhookRoutes = require('./routes/webhooks');
 
 const app = express();
@@ -42,6 +43,7 @@ app.use('/api/inquiries', inquiriesRoutes);
 app.use('/api/clarity', clarityRoutes);
 app.use('/api/regulation-reset', regulationResetRoutes);
 app.use('/api/recalibration', recalibrationRoutes);
+app.use('/api/private-work', privateWorkRoutes);
 
 // Serve static assets from client build
 app.use(express.static(DIST_PATH));

@@ -12,11 +12,11 @@ router.use((req, res, next) => {
 });
 
 const SITE_URL = process.env.SITE_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
-const SESSION_PRICE = 50000;
-const SESSION_PRODUCT = 'recalibration-session';
+const PRIVATE_SESSION_PRICE = 50000;
+const PRIVATE_SESSION_PRODUCT = 'private-work';
 const MAX_SESSION_AGE_SECONDS = 30 * 24 * 60 * 60;
 
-async function getPaidSession(sessionId) {
+async function getPaidPrivateSession(sessionId) {
   const checkedId = validateCheckoutSessionId(sessionId);
   if (!checkedId.valid) {
     const error = new Error(checkedId.error);
@@ -35,8 +35,8 @@ async function getPaidSession(sessionId) {
 
   if (
     session.payment_status !== 'paid' ||
-    session.metadata?.product !== SESSION_PRODUCT ||
-    session.amount_total !== SESSION_PRICE ||
+    session.metadata?.product !== PRIVATE_SESSION_PRODUCT ||
+    session.amount_total !== PRIVATE_SESSION_PRICE ||
     session.currency !== 'usd'
   ) {
     const error = new Error('Payment could not be verified.');
@@ -59,7 +59,7 @@ function formatBooking(booking) {
   };
 }
 
-// POST /api/recalibration/create-checkout - Payment must happen before booking details are collected
+// POST /api/private-work/create-checkout - Payment must happen before details are collected
 router.post('/create-checkout', async (req, res) => {
   try {
     const session = await stripe.checkout.sessions.create({
@@ -69,42 +69,42 @@ router.post('/create-checkout', async (req, res) => {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: 'MacAdam Recalibration Session',
-              description: '90-minute strategic clarity and deep dive session with Patricia',
+              name: 'Private Regulation Session',
+              description: 'A tailored 60–90 minute strategic nervous system regulation session',
             },
-            unit_amount: SESSION_PRICE,
+            unit_amount: PRIVATE_SESSION_PRICE,
           },
           quantity: 1,
         },
       ],
       mode: 'payment',
-      success_url: `${SITE_URL.replace(/\/$/, '')}/recalibration-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${SITE_URL.replace(/\/$/, '')}/clarity-session-deep?canceled=true`,
+      success_url: `${SITE_URL.replace(/\/$/, '')}/private-work-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${SITE_URL.replace(/\/$/, '')}/private-work?canceled=true`,
       metadata: {
-        product: SESSION_PRODUCT,
+        product: PRIVATE_SESSION_PRODUCT,
       },
     });
 
     res.json({ url: session.url });
   } catch (err) {
-    console.error('Recalibration checkout error:', err);
+    console.error('Private work checkout error:', err);
     res.status(500).json({ error: 'Unable to start checkout.' });
   }
 });
 
-// GET /api/recalibration/verify - Verify payment before displaying the booking form
+// GET /api/private-work/verify - Verify payment before displaying the details form
 router.get('/verify', async (req, res) => {
   try {
-    await getPaidSession(req.query.session_id);
+    await getPaidPrivateSession(req.query.session_id);
     res.json({ paid: true });
   } catch (err) {
-    console.error('Verify recalibration payment error:', err);
+    console.error('Verify private work payment error:', err);
     const statusCode = err.statusCode || (err.type === 'StripeInvalidRequestError' ? 402 : 500);
     res.status(statusCode).json({ error: 'Unable to verify payment.', paid: false });
   }
 });
 
-// POST /api/recalibration/complete-booking - Save details only for a verified paid session
+// POST /api/private-work/complete-booking - Save details only for a verified paid session
 router.post('/complete-booking', async (req, res) => {
   try {
     const validation = validateBookingDetails(req.body);
@@ -115,7 +115,7 @@ router.post('/complete-booking', async (req, res) => {
       });
     }
 
-    const stripeSession = await getPaidSession(req.body.session_id);
+    const stripeSession = await getPaidPrivateSession(req.body.session_id);
     const existing = await RecalibrationSession.findOne({ stripeSessionId: stripeSession.id });
     if (existing) {
       return res.json({ success: true, alreadyCompleted: true, booking: formatBooking(existing) });
@@ -123,13 +123,14 @@ router.post('/complete-booking', async (req, res) => {
 
     const booking = await RecalibrationSession.create({
       ...validation.values,
+      sessionType: 'private-work',
       stripeSessionId: stripeSession.id,
       stripePaymentStatus: 'paid',
       amount: stripeSession.amount_total,
     });
 
     sendRecalibrationConfirmation(booking).catch((err) =>
-      console.error('Failed to send recalibration confirmation email:', err)
+      console.error('Failed to send private work confirmation email:', err)
     );
 
     res.status(201).json({ success: true, booking: formatBooking(booking) });
@@ -140,7 +141,7 @@ router.post('/complete-booking', async (req, res) => {
         return res.json({ success: true, alreadyCompleted: true, booking: formatBooking(existing) });
       }
     }
-    console.error('Complete recalibration booking error:', err);
+    console.error('Complete private work booking error:', err);
     const statusCode = err.statusCode || (err.type === 'StripeInvalidRequestError' ? 402 : 500);
     res.status(statusCode).json({ error: statusCode >= 500 ? 'Unable to complete booking.' : err.message });
   }

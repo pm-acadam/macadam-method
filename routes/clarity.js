@@ -2,6 +2,7 @@ const express = require('express');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const ClaritySession = require('../models/ClaritySession');
 const { sendClaritySessionConfirmation } = require('../utils/email');
+const { validateBookingDetails, validateCheckoutSessionId } = require('../utils/validation');
 
 const router = express.Router();
 
@@ -11,32 +12,57 @@ router.use((req, res, next) => {
 });
 
 const SITE_URL = process.env.SITE_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
-const SESSION_PRICE = 30000; // $300 in cents
+const SESSION_PRICE = 30000;
+const SESSION_PRODUCT = 'clarity-session';
+const MAX_SESSION_AGE_SECONDS = 30 * 24 * 60 * 60;
 
-// POST /api/clarity/create-checkout - Create Stripe Checkout session for clarity session
+async function getPaidSession(sessionId) {
+  const checkedId = validateCheckoutSessionId(sessionId);
+  if (!checkedId.valid) {
+    const error = new Error(checkedId.error);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const session = await stripe.checkout.sessions.retrieve(checkedId.sessionId);
+  const age = Math.floor(Date.now() / 1000) - session.created;
+
+  if (age > MAX_SESSION_AGE_SECONDS) {
+    const error = new Error('Payment session has expired.');
+    error.statusCode = 403;
+    throw error;
+  }
+
+  if (
+    session.payment_status !== 'paid' ||
+    session.metadata?.product !== SESSION_PRODUCT ||
+    session.amount_total !== SESSION_PRICE ||
+    session.currency !== 'usd'
+  ) {
+    const error = new Error('Payment could not be verified.');
+    error.statusCode = 402;
+    throw error;
+  }
+
+  return session;
+}
+
+function formatBooking(booking) {
+  return {
+    firstName: booking.firstName,
+    lastName: booking.lastName,
+    email: booking.email,
+    phone: booking.phone || '',
+    message: booking.message || '',
+    amount: booking.amount,
+    createdAt: booking.createdAt,
+  };
+}
+
+// POST /api/clarity/create-checkout - Payment must happen before booking details are collected
 router.post('/create-checkout', async (req, res) => {
   try {
-    const { firstName, lastName, email, phone, message } = req.body;
-
-    if (!firstName || !lastName || !email) {
-      return res.status(400).json({ error: 'First name, last name, and email are required' });
-    }
-
-    // Create a pending session record first
-    const tempSession = new ClaritySession({
-      firstName,
-      lastName,
-      email,
-      phone: phone || '',
-      message: message || '',
-      stripeSessionId: null, // Will be set by webhook
-      stripePaymentStatus: 'pending',
-      amount: SESSION_PRICE,
-    });
-    await tempSession.save();
-
-    // Create Stripe checkout session with the DB record ID in metadata
-    const stripeSession = await stripe.checkout.sessions.create({
+    const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
         {
@@ -54,100 +80,71 @@ router.post('/create-checkout', async (req, res) => {
       mode: 'payment',
       success_url: `${SITE_URL.replace(/\/$/, '')}/clarity-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${SITE_URL.replace(/\/$/, '')}/clarity-session?canceled=true`,
-      customer_email: email,
       metadata: {
-        claritySessionId: String(tempSession._id),
+        product: SESSION_PRODUCT,
       },
     });
 
-    // Update with Stripe session ID (webhook will handle payment update)
-    tempSession.stripeSessionId = stripeSession.id;
-    await tempSession.save();
-
-    res.json({ url: stripeSession.url });
+    res.json({ url: session.url });
   } catch (err) {
-    console.error('Clarity session checkout error:', err);
-    res.status(500).json({ error: err.message || 'Failed to create checkout session' });
+    console.error('Clarity checkout error:', err);
+    res.status(500).json({ error: 'Unable to start checkout.' });
   }
 });
 
-// GET /api/clarity/sessions - List all paid clarity sessions (admin only)
-router.get('/sessions', async (req, res) => {
-  try {
-    const sessions = await ClaritySession.find({ stripePaymentStatus: 'paid' })
-      .sort({ createdAt: -1 })
-      .lean();
-
-    res.json({ sessions });
-  } catch (err) {
-    console.error('List clarity sessions error:', err);
-    res.status(500).json({ error: err.message || 'Failed to list sessions' });
-  }
-});
-
-// GET /api/clarity/verify - Verify payment completion, update DB, send email
+// GET /api/clarity/verify - Verify payment before displaying the booking form
 router.get('/verify', async (req, res) => {
   try {
-    const sessionId = String(req.query.session_id || '').trim();
-    if (!sessionId) {
-      return res.status(400).json({ error: 'session_id is required' });
-    }
-
-    // Validate session ID format (Stripe sessions start with cs_)
-    if (!sessionId.startsWith('cs_')) {
-      return res.status(400).json({ error: 'Invalid session_id format' });
-    }
-
-    const stripeSession = await stripe.checkout.sessions.retrieve(sessionId);
-    
-    // Check session age - reject if older than 24 hours
-    const sessionAge = Math.floor((Date.now() - stripeSession.created * 1000) / 1000 / 3600);
-    if (sessionAge > 24) {
-      return res.status(403).json({ 
-        error: 'Session has expired (older than 24 hours)',
-        paid: false 
-      });
-    }
-
-    const paid = stripeSession?.payment_status === 'paid';
-    let claritySession = await ClaritySession.findOne({ stripeSessionId: sessionId });
-
-    if (!claritySession) {
-      return res.status(404).json({ 
-        error: 'Clarity session record not found',
-        paid: false 
-      });
-    }
-
-    // Webhook handles both the update and email confirmation
-    // This endpoint is just for client-side verification, no duplicate email
-
-    res.json({ paid, session: claritySession });
+    await getPaidSession(req.query.session_id);
+    res.json({ paid: true });
   } catch (err) {
-    console.error('Verify clarity session error:', err);
-    // Return 402 for payment issues, 500 for server issues
-    const statusCode = err.type === 'StripeInvalidRequestError' ? 402 : 500;
-    res.status(statusCode).json({ 
-      error: 'Unable to verify payment',
-      paid: false 
-    });
+    console.error('Verify clarity payment error:', err);
+    const statusCode = err.statusCode || (err.type === 'StripeInvalidRequestError' ? 402 : 500);
+    res.status(statusCode).json({ error: 'Unable to verify payment.', paid: false });
   }
 });
 
-// GET /api/clarity/session/:id - Get specific session details
-router.get('/session/:id', async (req, res) => {
+// POST /api/clarity/complete-booking - Save details only for a verified paid session
+router.post('/complete-booking', async (req, res) => {
   try {
-    const { id } = req.params;
-    const session = await ClaritySession.findById(id).lean();
-
-    if (!session) {
-      return res.status(404).json({ error: 'Session not found' });
+    const validation = validateBookingDetails(req.body);
+    if (!validation.valid) {
+      return res.status(422).json({
+        error: 'Please correct the highlighted fields.',
+        fields: validation.errors,
+      });
     }
 
-    res.json(session);
+    const stripeSession = await getPaidSession(req.body.session_id);
+    const existing = await ClaritySession.findOne({ stripeSessionId: stripeSession.id });
+    if (existing) {
+      return res.json({ success: true, alreadyCompleted: true, booking: formatBooking(existing) });
+    }
+
+    const booking = await ClaritySession.create({
+      ...validation.values,
+      stripeSessionId: stripeSession.id,
+      stripePaymentStatus: 'paid',
+      amount: stripeSession.amount_total,
+      currency: stripeSession.currency,
+    });
+
+    sendClaritySessionConfirmation(booking).catch((err) =>
+      console.error('Failed to send clarity confirmation email:', err)
+    );
+
+    res.status(201).json({ success: true, booking: formatBooking(booking) });
   } catch (err) {
-    console.error('Get clarity session error:', err);
-    res.status(500).json({ error: err.message || 'Failed to get session' });
+    if (err?.code === 11000) {
+      const existing = await ClaritySession.findOne({ stripeSessionId: req.body.session_id });
+      if (existing) {
+        return res.json({ success: true, alreadyCompleted: true, booking: formatBooking(existing) });
+      }
+    }
+    console.error('Complete clarity booking error:', err);
+    const statusCode = err.statusCode || (err.type === 'StripeInvalidRequestError' ? 402 : 500);
+    res.status(statusCode).json({ error: statusCode >= 500 ? 'Unable to complete booking.' : err.message });
   }
 });
+
 module.exports = router;

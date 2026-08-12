@@ -2,7 +2,7 @@ const express = require('express');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const ClaritySession = require('../models/ClaritySession');
 const RecalibrationSession = require('../models/RecalibrationSession');
-const { sendClaritySessionConfirmation, sendRecalibrationConfirmation, sendRegulationResetConfirmation } = require('../utils/email');
+const { sendRegulationResetConfirmation } = require('../utils/email');
 
 const router = express.Router();
 
@@ -31,45 +31,29 @@ router.post('/stripe', express.raw({type: 'application/json'}), async (req, res)
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object;
 
-      // Update clarity session if this is a clarity booking
+      // Legacy booking sessions: only sync the payment status; confirmation emails are
+      // sent by the complete-booking endpoints once the buyer submits their details.
       if (session.metadata?.claritySessionId) {
         try {
-          const claritySession = await ClaritySession.findById(session.metadata.claritySessionId);
-          
-          if (claritySession) {
-            claritySession.stripeSessionId = session.id;
-            claritySession.stripePaymentStatus = 'paid';
-            claritySession.amount = session.amount_total;
-            await claritySession.save();
-
-            // Send confirmation email
-            sendClaritySessionConfirmation(claritySession).catch(err =>
-              console.error('Failed to send clarity confirmation email:', err)
-            );
-          }
+          await ClaritySession.findByIdAndUpdate(session.metadata.claritySessionId, {
+            stripeSessionId: session.id,
+            stripePaymentStatus: 'paid',
+            amount: session.amount_total,
+          });
         } catch (err) {
-          console.error('Error updating clarity session from webhook:', err);
+          console.error('Error updating legacy clarity session from webhook:', err);
         }
       }
 
-      // Update recalibration session if this is a recalibration booking
       if (session.metadata?.recalibrationSessionId) {
         try {
-          const recalibrationSession = await RecalibrationSession.findById(session.metadata.recalibrationSessionId);
-          
-          if (recalibrationSession) {
-            recalibrationSession.stripeSessionId = session.id;
-            recalibrationSession.stripePaymentStatus = 'paid';
-            recalibrationSession.amount = session.amount_total;
-            await recalibrationSession.save();
-
-            // Send confirmation email
-            sendRecalibrationConfirmation(recalibrationSession).catch(err =>
-              console.error('Failed to send recalibration confirmation email:', err)
-            );
-          }
+          await RecalibrationSession.findByIdAndUpdate(session.metadata.recalibrationSessionId, {
+            stripeSessionId: session.id,
+            stripePaymentStatus: 'paid',
+            amount: session.amount_total,
+          });
         } catch (err) {
-          console.error('Error updating recalibration session from webhook:', err);
+          console.error('Error updating legacy recalibration session from webhook:', err);
         }
       }
 

@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const settingsSchema = new mongoose.Schema({
   allowAdminSignup: {
     type: Boolean,
-    default: true,
+    default: false,
   },
 }, { timestamps: true });
 

@@ -6,6 +6,7 @@ const multer = require('multer');
 const Admin = require('../models/Admin');
 const Settings = require('../models/Settings');
 const Article = require('../models/Article');
+const { sanitizeHtml } = require('../utils/sanitize');
 const Course = require('../models/Course');
 const Testimonial = require('../models/Testimonial');
 const Inquiry = require('../models/Inquiry');
@@ -16,7 +17,11 @@ const uploadPdf = multer({ storage: multer.memoryStorage(), limits: { fileSize: 
 
 const router = express.Router();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-jwt-secret-change-in-production';
+if (!process.env.JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET environment variable is not set. Refusing to start with an insecure default secret.');
+  process.exit(1);
+}
+const JWT_SECRET = process.env.JWT_SECRET;
 const CLOUDFLARE_PUBLIC_URL = process.env.CLOUDFLARE_R2_PUBLIC_URL?.replace(/\/$/, '') || 'https://pub-66a3335a61d046f1bdf3f81c9e8d8bf0.r2.dev';
 
 function generateSecretKey() {
@@ -37,7 +42,7 @@ function formatCourseUrls(course) {
 async function getSettings() {
   let settings = await Settings.findOne();
   if (!settings) {
-    settings = await Settings.create({ allowAdminSignup: true });
+    settings = await Settings.create({ allowAdminSignup: false });
   }
   return settings;
 }
@@ -53,21 +58,13 @@ function requireAuth(req, res, next) {
   }
 }
 
-// GET /api/admin/signup-allowed - Public check if signup is open
-router.get('/signup-allowed', async (req, res) => {
-  try {
-    const settings = await getSettings();
-    res.json({ allowed: settings.allowAdminSignup });
-  } catch (err) {
-    res.status(500).json({ allowed: false });
-  }
-});
-
-// POST /api/admin/signup - Create new admin
+// POST /api/admin/signup - Create the first admin, or create admins only while signup is explicitly enabled
 router.post('/signup', async (req, res) => {
   try {
+    const adminCount = await Admin.countDocuments();
     const settings = await getSettings();
-    if (!settings.allowAdminSignup) {
+    const canSignup = adminCount === 0 || settings.allowAdminSignup;
+    if (!canSignup) {
       return res.status(403).json({ error: 'New admin signup is currently disabled.' });
     }
 
@@ -522,7 +519,7 @@ router.post('/articles', requireAuth, async (req, res) => {
       title: title.trim(),
       thumbnail: thumbnail || '',
       shortDescription: shortDescription.trim(),
-      content: content || '',
+      content: sanitizeHtml(content || ''),
       excerpt: excerpt || '',
       status: 'draft',
       author: req.admin.id,
@@ -565,7 +562,7 @@ router.put('/articles/:id', requireAuth, async (req, res) => {
       article.shortDescription = sd;
     }
     if (thumbnail !== undefined) article.thumbnail = String(thumbnail);
-    if (content !== undefined) article.content = String(content);
+    if (content !== undefined) article.content = sanitizeHtml(String(content));
     if (excerpt !== undefined) article.excerpt = String(excerpt);
     await article.save();
     res.json(article);
