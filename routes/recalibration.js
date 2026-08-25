@@ -79,7 +79,7 @@ router.post('/create-checkout', async (req, res) => {
       ],
       mode: 'payment',
       success_url: `${SITE_URL.replace(/\/$/, '')}/recalibration-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${SITE_URL.replace(/\/$/, '')}/clarity-session-deep?canceled=true`,
+      cancel_url: `${SITE_URL.replace(/\/$/, '')}/mapping-session?canceled=true`,
       metadata: {
         product: SESSION_PRODUCT,
       },

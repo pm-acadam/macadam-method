@@ -48,6 +48,11 @@ app.use('/api/private-work', privateWorkRoutes);
 // Serve static assets from client build
 app.use(express.static(DIST_PATH));
 
+// Preserve legacy public URLs with permanent redirects after the copy rename.
+app.get('/regulation-reset', (req, res) => res.redirect(301, '/sorting-kit'));
+app.get('/clarity-session', (req, res) => res.redirect(301, '/mapping-session'));
+app.get('/clarity-session-deep', (req, res) => res.redirect(301, '/mapping-session'));
+
 // SPA fallback: serve index.html for all non-API routes (Express 5 uses /{*splat} for catch-all)
 app.get('/{*splat}', (req, res) => {
   res.sendFile(path.join(DIST_PATH, 'index.html'));

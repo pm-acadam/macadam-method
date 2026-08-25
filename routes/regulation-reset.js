@@ -24,8 +24,8 @@ router.post('/create-checkout', async (req, res) => {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: 'Regulation Reset™',
-              description: 'Guided nervous system reset — PDF framework. Lifetime access.',
+              name: 'The Sorting Kit',
+              description: 'Self-paced MacAdam Method™ guide with sorting worksheets. Lifetime access.',
             },
             unit_amount: PRICE,
           },
@@ -34,7 +34,7 @@ router.post('/create-checkout', async (req, res) => {
       ],
       mode: 'payment',
       success_url: `${SITE_URL.replace(/\/$/, '')}/regulation-reset-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${SITE_URL.replace(/\/$/, '')}/regulation-reset?canceled=true`,
+      cancel_url: `${SITE_URL.replace(/\/$/, '')}/sorting-kit?canceled=true`,
       metadata: {
         product: 'regulation-reset',
       },
@@ -147,7 +147,7 @@ router.get('/download', async (req, res) => {
     const pdfBuffer = await downloadToBuffer(PDF_URL);
 
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename="Regulation-Reset.pdf"');
+    res.setHeader('Content-Disposition', 'attachment; filename="The-Sorting-Kit.pdf"');
     res.setHeader('Cache-Control', 'no-store');
     res.send(pdfBuffer);
   } catch (err) {
